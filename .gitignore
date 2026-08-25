@@ -1,0 +1,5 @@
+Report_*/
+Backup_*/
+*.dmp
+tests/TestResults.xml
+*.log
