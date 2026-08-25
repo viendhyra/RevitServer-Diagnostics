@@ -40,6 +40,35 @@ function New-RevitPoolRepairPlan {
     $plan
 }
 
+function Test-RevitPoolCompliance {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$Pool)
+    [bool](
+        $Pool.AutoStart -eq $true -and
+        [string]$Pool.StartMode -eq 'AlwaysRunning' -and
+        [double]$Pool.IdleTimeoutMinutes -eq 0 -and
+        $Pool.RapidFailEnabled -eq $true -and
+        [int]$Pool.RapidFailMaxCrashes -eq 20 -and
+        [string]$Pool.State -eq 'Started'
+    )
+}
+
+function New-IisFeatureRollbackCommand {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string[]]$Features)
+    $quoted = @($Features | ForEach-Object { "'" + ($_ -replace "'","''") + "'" })
+    "Uninstall-WindowsFeature -Name @($($quoted -join ','))"
+}
+
+function New-DynamicIpRestrictionChangePlan {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Location)
+    @(
+        [pscustomobject]@{Location=$Location;Filter='system.webServer/security/dynamicIpSecurity/denyByConcurrentRequests';Name='enabled';Value=$false},
+        [pscustomobject]@{Location=$Location;Filter='system.webServer/security/dynamicIpSecurity/denyByRequestRate';Name='enabled';Value=$false}
+    )
+}
+
 function New-RepairContext {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$BasePath)
@@ -115,7 +144,16 @@ function Invoke-RevitBasicRepair {
             Set-ItemProperty $iisPath -Name failure.rapidFailProtection -Value $true
             Set-ItemProperty $iisPath -Name failure.rapidFailProtectionMaxCrashes -Value 20
             if ((Get-WebAppPoolState -Name $item.Target).Value -ne 'Started') { Start-WebAppPool -Name $item.Target }
-            [void]$results.Add((New-RepairResult -Name "Pool:$($item.Target)" -Status Changed -Message 'autoStart, AlwaysRunning, idle timeout and Rapid-Fail configured; pool started.'))
+            $verifiedItem = Get-Item $iisPath
+            $verified = [pscustomobject]@{
+                AutoStart=$verifiedItem.autoStart;StartMode=[string]$verifiedItem.startMode
+                IdleTimeoutMinutes=$verifiedItem.processModel.idleTimeout.TotalMinutes
+                RapidFailEnabled=$verifiedItem.failure.rapidFailProtection
+                RapidFailMaxCrashes=$verifiedItem.failure.rapidFailProtectionMaxCrashes
+                State=(Get-WebAppPoolState -Name $item.Target).Value
+            }
+            if (-not (Test-RevitPoolCompliance -Pool $verified)) { throw 'IIS accepted the write but verification did not match the required state.' }
+            [void]$results.Add((New-RepairResult -Name "Pool:$($item.Target)" -Status Changed -Message 'Settings were written and verified: autoStart, AlwaysRunning, idle timeout 0, Rapid-Fail 20, pool started.'))
         } catch {
             [void]$results.Add((New-RepairResult -Name "Pool:$($item.Target)" -Status Failed -Message $_.Exception.Message))
         }
@@ -155,7 +193,7 @@ function Install-RequiredIisFeatures {
     }
     try {
         $result = Install-WindowsFeature -Name $missing -IncludeManagementTools -ErrorAction Stop
-        Add-RollbackOperation -Context $Context -Command ("Uninstall-WindowsFeature -Name @('{0}')" -f (($missing -join "','") -replace "'","''"))
+        Add-RollbackOperation -Context $Context -Command (New-IisFeatureRollbackCommand -Features $missing)
         $status = if ($result.RestartNeeded -eq 'Yes') { 'RebootRequired' } else { 'Changed' }
         New-RepairResult -Name 'IisFeatures' -Status $status -Message "Installed: $($missing -join ', '). RestartNeeded=$($result.RestartNeeded)"
     } catch { New-RepairResult -Name 'IisFeatures' -Status Failed -Message $_.Exception.Message }
@@ -298,8 +336,9 @@ function Disable-RevitDynamicIpRestrictions {
     foreach ($target in $targets) {
         if (-not $PSCmdlet.ShouldProcess($target,'Disable Dynamic IP Restrictions for Revit application scope')) { continue }
         try {
-            Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Location $target -Filter 'system.webServer/security/dynamicIpSecurity' -Name 'denyByConcurrentRequests.enabled' -Value $false
-            Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Location $target -Filter 'system.webServer/security/dynamicIpSecurity' -Name 'denyByRequestRate.enabled' -Value $false
+            foreach ($change in @(New-DynamicIpRestrictionChangePlan -Location $target)) {
+                Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Location $change.Location -Filter $change.Filter -Name $change.Name -Value $change.Value
+            }
             $results += New-RepairResult -Name "DynamicIpRestrictions:$target" -Status Changed -Message 'Both dynamic deny rules disabled at Revit scope.'
         } catch { $results += New-RepairResult -Name "DynamicIpRestrictions:$target" -Status Failed -Message $_.Exception.Message }
     }
@@ -311,4 +350,4 @@ function New-DynamicIpRestrictionPlanLocal {
     @($Applications | Where-Object { $_ -match '(?i)RevitServer|ModelService' })
 }
 
-Export-ModuleMember -Function New-RepairResult,Get-RequestedRepairs,New-RevitPoolRepairPlan,New-RepairContext,Add-RollbackOperation,Backup-IisConfiguration,Complete-RollbackScript,Invoke-RevitBasicRepair,Install-RequiredIisFeatures,Register-MicrosoftUpdate,New-ProcDumpInstallArguments,Assert-MicrosoftSignature,Install-VerifiedProcDump,Assert-Net481UpgradeGate,Install-Net481Upgrade,Install-ApplicableUpdates,Disable-RevitDynamicIpRestrictions
+Export-ModuleMember -Function New-RepairResult,Get-RequestedRepairs,New-RevitPoolRepairPlan,Test-RevitPoolCompliance,New-IisFeatureRollbackCommand,New-DynamicIpRestrictionChangePlan,New-RepairContext,Add-RollbackOperation,Backup-IisConfiguration,Complete-RollbackScript,Invoke-RevitBasicRepair,Install-RequiredIisFeatures,Register-MicrosoftUpdate,New-ProcDumpInstallArguments,Assert-MicrosoftSignature,Install-VerifiedProcDump,Assert-Net481UpgradeGate,Install-Net481Upgrade,Install-ApplicableUpdates,Disable-RevitDynamicIpRestrictions
