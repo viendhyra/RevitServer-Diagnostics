@@ -53,6 +53,85 @@ function Test-RevitPoolCompliance {
     )
 }
 
+function New-PoolActionPreview {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Pools,
+        [Parameter(Mandatory)][ValidateSet('Start','BaseSettings','RapidFail')][string]$Action
+    )
+    foreach ($pool in @($Pools | Where-Object { $_.Name -match '(?i)Revit|ModelService' })) {
+        switch ($Action) {
+            'Start' {
+                if ([string]$pool.State -ne 'Started') {
+                    [pscustomobject]@{Pool=$pool.Name;Setting='State';Current=[string]$pool.State;Desired='Started'}
+                }
+            }
+            'BaseSettings' {
+                [pscustomobject]@{Pool=$pool.Name;Setting='AutoStart';Current=[string]$pool.AutoStart;Desired='True'}
+                [pscustomobject]@{Pool=$pool.Name;Setting='StartMode';Current=[string]$pool.StartMode;Desired='AlwaysRunning'}
+                [pscustomobject]@{Pool=$pool.Name;Setting='IdleTimeoutMinutes';Current=[string]$pool.IdleTimeoutMinutes;Desired='0'}
+            }
+            'RapidFail' {
+                [pscustomobject]@{Pool=$pool.Name;Setting='RapidFailEnabled';Current=[string]$pool.RapidFailEnabled;Desired='True'}
+                [pscustomobject]@{Pool=$pool.Name;Setting='RapidFailMaxCrashes';Current=[string]$pool.RapidFailMaxCrashes;Desired='20'}
+            }
+        }
+    }
+}
+
+function Invoke-PoolAction {
+    [CmdletBinding(SupportsShouldProcess=$true,ConfirmImpact='High')]
+    param(
+        [Parameter(Mandatory)]$Context,
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Pools,
+        [Parameter(Mandatory)][ValidateSet('Start','BaseSettings','RapidFail')][string]$Action
+    )
+    Assert-Administrator
+    Import-Module WebAdministration -ErrorAction Stop
+    $targets = @($Pools | Where-Object { $_.Name -match '(?i)Revit|ModelService' })
+    if ($targets.Count -eq 0) { return New-RepairResult -Name "PoolAction:$Action" -Status Skipped -Message 'No Revit Server pools were found.' }
+    if ($Action -ne 'Start') { Backup-IisConfiguration -Context $Context }
+    $results = New-Object Collections.ArrayList
+    foreach ($pool in $targets) {
+        $preview = @(New-PoolActionPreview -Pools @($pool) -Action $Action)
+        if ($preview.Count -eq 0) {
+            [void]$results.Add((New-RepairResult -Name "$Action`:$($pool.Name)" -Status AlreadyCompliant -Message 'The requested state is already active.'))
+            continue
+        }
+        if (-not $PSCmdlet.ShouldProcess($pool.Name,("Apply pool action {0}" -f $Action))) {
+            [void]$results.Add((New-RepairResult -Name "$Action`:$($pool.Name)" -Status Skipped -Message 'Confirmation declined.'))
+            continue
+        }
+        try {
+            $iisPath = "IIS:\AppPools\$($pool.Name)"
+            switch ($Action) {
+                'Start' { Start-WebAppPool -Name $pool.Name }
+                'BaseSettings' {
+                    Set-ItemProperty $iisPath -Name autoStart -Value $true
+                    Set-ItemProperty $iisPath -Name startMode -Value 'AlwaysRunning'
+                    Set-ItemProperty $iisPath -Name processModel.idleTimeout -Value ([timespan]::Zero)
+                }
+                'RapidFail' {
+                    Set-ItemProperty $iisPath -Name failure.rapidFailProtection -Value $true
+                    Set-ItemProperty $iisPath -Name failure.rapidFailProtectionMaxCrashes -Value 20
+                }
+            }
+            $verifiedItem = Get-Item $iisPath
+            $verifiedState = [string](Get-WebAppPoolState -Name $pool.Name).Value
+            $verified = switch ($Action) {
+                'Start' { $verifiedState -eq 'Started' }
+                'BaseSettings' { $verifiedItem.autoStart -eq $true -and [string]$verifiedItem.startMode -eq 'AlwaysRunning' -and [double]$verifiedItem.processModel.idleTimeout.TotalMinutes -eq 0 }
+                'RapidFail' { $verifiedItem.failure.rapidFailProtection -eq $true -and [int]$verifiedItem.failure.rapidFailProtectionMaxCrashes -eq 20 }
+            }
+            if (-not $verified) { throw 'IIS accepted the write but verification did not match the requested state.' }
+            [void]$results.Add((New-RepairResult -Name "$Action`:$($pool.Name)" -Status Changed -Message 'The requested state was written and verified.'))
+        } catch {
+            [void]$results.Add((New-RepairResult -Name "$Action`:$($pool.Name)" -Status Failed -Message $_.Exception.Message))
+        }
+    }
+    @($results)
+}
+
 function New-IisFeatureRollbackCommand {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string[]]$Features)
@@ -350,4 +429,4 @@ function New-DynamicIpRestrictionPlanLocal {
     @($Applications | Where-Object { $_ -match '(?i)RevitServer|ModelService' })
 }
 
-Export-ModuleMember -Function New-RepairResult,Get-RequestedRepairs,New-RevitPoolRepairPlan,Test-RevitPoolCompliance,New-IisFeatureRollbackCommand,New-DynamicIpRestrictionChangePlan,New-RepairContext,Add-RollbackOperation,Backup-IisConfiguration,Complete-RollbackScript,Invoke-RevitBasicRepair,Install-RequiredIisFeatures,Register-MicrosoftUpdate,New-ProcDumpInstallArguments,Assert-MicrosoftSignature,Install-VerifiedProcDump,Assert-Net481UpgradeGate,Install-Net481Upgrade,Install-ApplicableUpdates,Disable-RevitDynamicIpRestrictions
+Export-ModuleMember -Function New-RepairResult,Get-RequestedRepairs,New-RevitPoolRepairPlan,Test-RevitPoolCompliance,New-PoolActionPreview,Invoke-PoolAction,New-IisFeatureRollbackCommand,New-DynamicIpRestrictionChangePlan,New-RepairContext,Add-RollbackOperation,Backup-IisConfiguration,Complete-RollbackScript,Invoke-RevitBasicRepair,Install-RequiredIisFeatures,Register-MicrosoftUpdate,New-ProcDumpInstallArguments,Assert-MicrosoftSignature,Install-VerifiedProcDump,Assert-Net481UpgradeGate,Install-Net481Upgrade,Install-ApplicableUpdates,Disable-RevitDynamicIpRestrictions
