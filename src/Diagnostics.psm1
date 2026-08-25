@@ -283,4 +283,143 @@ function New-DynamicIpRestrictionPlan {
     [pscustomobject]@{Targets=$targets;RequiresDedicatedSwitch=$true}
 }
 
-Export-ModuleMember -Function New-DiagnosticFinding,ConvertTo-DotNetState,Get-DotNetFrameworkState,ConvertFrom-WuaUpdate,Select-RelevantUpdates,Get-WindowsUpdateState,Find-ApplicableUpdates,Get-CrashTimeline,Get-MissingEndpointRequest,Get-CrashEvents,Get-IisState,Get-RevitServerState,Get-NetworkState,Get-ProfilerState,New-DynamicIpRestrictionPlan
+function Get-ExtendedDiagnostics {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][datetime]$Since,
+        [Parameter(Mandatory)]$IisState,
+        [Parameter(Mandatory)]$RevitState,
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$CrashEvents,
+        [switch]$SkipEndpointTest
+    )
+    $nativeNames = @('protsup.dll','diprestr.dll','iiscore.dll','cachuri.dll','cachfile.dll','compdyn.dll','compstat.dll','filter.dll','static.dll','defdoc.dll','authanon.dll','isapi.dll','iisreqs.dll')
+    $nativeModules = foreach ($name in $nativeNames) {
+        $path = Join-Path $env:windir "System32\inetsrv\$name"
+        if (Test-Path -LiteralPath $path) {
+            $file = Get-Item -LiteralPath $path
+            [pscustomobject]@{Name=$name;Version=$file.VersionInfo.FileVersion;Modified=$file.LastWriteTime;Path=$path;Suspect=($name -in @('protsup.dll','diprestr.dll','iiscore.dll'))}
+        }
+    }
+
+    $features = @()
+    if (Get-Command Get-WindowsFeature -ErrorAction SilentlyContinue) {
+        $featureNames = @('Web-Server','Web-Asp-Net45','Web-Net-Ext45','Web-ISAPI-Ext','Web-ISAPI-Filter','Web-Windows-Auth','Web-Static-Content','Web-Default-Doc','Web-Http-Errors','Web-Http-Logging','Web-Request-Monitor','NET-WCF-HTTP-Activation45','Web-Mgmt-Console')
+        $features = @(Get-WindowsFeature -Name $featureNames | Select-Object Name,DisplayName,InstallState)
+    }
+
+    $binaries = @()
+    $dataDirectories = @()
+    $logFiles = @()
+    foreach ($instance in @($RevitState.Instances)) {
+        foreach ($relative in @('Services\ModelService\bin\SQLite.Interop.dll','Services\ModelService\bin\System.Data.SQLite.dll','Tools\RevitServerToolCommand.exe','AutoSync\RevitServerAutoSync.exe')) {
+            $path = Join-Path $instance.Path $relative
+            if (Test-Path -LiteralPath $path) {
+                $file = Get-Item -LiteralPath $path
+                $binaries += [pscustomobject]@{Instance=$instance.Name;File=$file.Name;Version=$file.VersionInfo.FileVersion;Modified=$file.LastWriteTime;Path=$path}
+            }
+        }
+        foreach ($candidate in @("$env:ProgramData\Autodesk\Revit Server $($instance.Year)","$env:ProgramData\Autodesk\Revit Server\$($instance.Year)")) {
+            if (Test-Path -LiteralPath $candidate) {
+                $files = @(Get-ChildItem -LiteralPath $candidate -Recurse -File -ErrorAction SilentlyContinue)
+                $acl = $null
+                try { $acl = Get-Acl -LiteralPath $candidate } catch { }
+                $networkService = @()
+                if ($null -ne $acl) { $networkService = @($acl.Access | Where-Object { $_.IdentityReference -match 'NETWORK SERVICE|СЕТЕВАЯ СЛУЖБА' }) }
+                $dataDirectories += [pscustomobject]@{
+                    Instance=$instance.Name;Path=$candidate;Files=$files.Count
+                    SizeGB=[math]::Round((($files | Measure-Object Length -Sum).Sum)/1GB,2)
+                    LastWrite=($files | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
+                    HasNetworkService=[bool]($networkService.Count -gt 0)
+                    NetworkServiceRights=($networkService.FileSystemRights -join '; ')
+                }
+                $logFiles += @($files | Where-Object { $_.Extension -in @('.log','.txt') -and $_.LastWriteTime -gt $Since } | Sort-Object LastWriteTime -Descending | Select-Object -First 10)
+            }
+        }
+    }
+    $logErrors = @()
+    foreach ($log in @($logFiles | Sort-Object FullName -Unique | Select-Object -First 30)) {
+        try {
+            $logErrors += @(Select-String -LiteralPath $log.FullName -Pattern 'error|exception|fail|fatal|denied' -ErrorAction Stop | Select-Object -Last 20 | ForEach-Object {
+                [pscustomobject]@{Log=$log.FullName;Line=$_.LineNumber;Text=(($_.Line -replace '\s+',' ').Trim())}
+            })
+        } catch { }
+    }
+
+    $endpointTests = @()
+    if (-not $SkipEndpointTest) {
+        foreach ($instance in @($RevitState.Instances)) {
+            if (-not $instance.Year) { continue }
+            $url = "http://localhost/RevitServerAdminRESTService$($instance.Year)/AdminRESTService.svc"
+            $watch = [Diagnostics.Stopwatch]::StartNew(); $status=''; $errorText=''
+            try { $response = Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 20 -ErrorAction Stop; $status=$response.StatusCode }
+            catch { if ($null -ne $_.Exception.Response) { $status=[int]$_.Exception.Response.StatusCode }; $errorText=$_.Exception.Message }
+            $watch.Stop()
+            $endpointTests += [pscustomobject]@{Instance=$instance.Name;Url=$url;Status=$status;Milliseconds=$watch.ElapsedMilliseconds;Error=$errorText}
+        }
+    }
+
+    $missingEndpoints = @()
+    try {
+        $wcfEvents = @(Get-WinEvent -FilterHashtable @{LogName='Application';ProviderName='System.ServiceModel 4.0.0.0';Id=3;StartTime=$Since} -ErrorAction Stop)
+        $requests = @($wcfEvents | ForEach-Object { Get-MissingEndpointRequest -Message $_.Message } | Where-Object Endpoint)
+        $missingEndpoints = @($requests | Group-Object Endpoint | Sort-Object Count -Descending | ForEach-Object {
+            [pscustomobject]@{Endpoint=$_.Name;Year=($_.Group | Select-Object -First 1).Year;Count=$_.Count}
+        })
+    } catch { }
+
+    $taskCorrelations = @()
+    $crashTimes = @($CrashEvents | Where-Object Type -eq 'WAS-5011' | ForEach-Object Time)
+    if ($crashTimes.Count -gt 0 -and (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue)) {
+        try {
+            foreach ($task in @(Get-ScheduledTask)) {
+                $info = $task | Get-ScheduledTaskInfo -ErrorAction SilentlyContinue
+                if ($null -eq $info -or $info.LastRunTime -lt [datetime]'2000-01-01') { continue }
+                foreach ($crashTime in $crashTimes) {
+                    $delta = ($crashTime - $info.LastRunTime).TotalMinutes
+                    if ([math]::Abs($delta) -le 5) { $taskCorrelations += [pscustomobject]@{Task="$($task.TaskPath)$($task.TaskName)";TaskRun=$info.LastRunTime;CrashTime=$crashTime;DeltaMinutes=[math]::Round($delta,1)} }
+                }
+            }
+        } catch { }
+    }
+
+    $w3wpModules = @()
+    foreach ($process in @(Get-Process w3wp -ErrorAction SilentlyContinue)) {
+        try {
+            foreach ($module in @($process.Modules)) { $w3wpModules += [pscustomobject]@{PID=$process.Id;Module=$module.ModuleName;Company=$module.FileVersionInfo.CompanyName;Version=$module.FileVersionInfo.FileVersion;Path=$module.FileName} }
+        } catch { }
+    }
+    $defender = $null
+    try {
+        $preference = Get-MpPreference -ErrorAction Stop
+        $defender = [pscustomobject]@{ExclusionPath=@($preference.ExclusionPath);ExclusionProcess=@($preference.ExclusionProcess);ExclusionExtension=@($preference.ExclusionExtension)}
+    } catch { }
+
+    $relatedSpecs = @(
+        @{Log='System';Provider='Schannel';Id=36874;Label='TLS handshake'},
+        @{Log='System';Provider='NetBT';Id=4321;Label='NetBIOS name conflict'},
+        @{Log='System';Provider='Microsoft-Windows-DNS-Client';Id=8016;Label='Dynamic DNS update'},
+        @{Log='Application';Provider='VSS';Id=@(13,8193);Label='VSS'},
+        @{Log='System';Provider='Service Control Manager';Id=@(7000,7009,7031,7034);Label='Service failures'},
+        @{Log='System';Provider='Microsoft-Windows-WAS';Id=@(5002,5021,5117);Label='WAS pool failures'}
+    )
+    $relatedEvents = @()
+    foreach ($spec in $relatedSpecs) {
+        try {
+            $events = @(Get-WinEvent -FilterHashtable @{LogName=$spec.Log;ProviderName=$spec.Provider;Id=$spec.Id;StartTime=$Since} -ErrorAction Stop)
+            $relatedEvents += [pscustomobject]@{Label=$spec.Label;Provider=$spec.Provider;EventId=(@($spec.Id) -join ',');Count=$events.Count;First=($events | Sort-Object TimeCreated | Select-Object -First 1).TimeCreated;Last=($events | Sort-Object TimeCreated | Select-Object -Last 1).TimeCreated}
+        } catch { }
+    }
+
+    $aeDebug = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AeDebug' -ErrorAction SilentlyContinue
+    $wer = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps' -ErrorAction SilentlyContinue
+    $dumpState = [pscustomobject]@{AeDebugDebugger=if($aeDebug){$aeDebug.Debugger}else{$null};AeDebugAuto=if($aeDebug){$aeDebug.Auto}else{$null};WerDumpFolder=if($wer){$wer.DumpFolder}else{$null};WerDumpType=if($wer){$wer.DumpType}else{$null}}
+
+    [pscustomobject]@{
+        NativeModules=@($nativeModules);Features=$features;Binaries=$binaries;DataDirectories=$dataDirectories
+        LogErrors=$logErrors;EndpointTests=$endpointTests;MissingEndpoints=$missingEndpoints
+        TaskCorrelations=$taskCorrelations;W3wpModules=$w3wpModules;Defender=$defender
+        RelatedEvents=$relatedEvents;DumpState=$dumpState
+    }
+}
+
+Export-ModuleMember -Function New-DiagnosticFinding,ConvertTo-DotNetState,Get-DotNetFrameworkState,ConvertFrom-WuaUpdate,Select-RelevantUpdates,Get-WindowsUpdateState,Find-ApplicableUpdates,Get-CrashTimeline,Get-MissingEndpointRequest,Get-CrashEvents,Get-IisState,Get-RevitServerState,Get-NetworkState,Get-ProfilerState,New-DynamicIpRestrictionPlan,Get-ExtendedDiagnostics
