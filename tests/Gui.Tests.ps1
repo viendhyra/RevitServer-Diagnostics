@@ -22,4 +22,9 @@ Describe 'WPF layout contract' {
         $reader = New-Object Xml.XmlNodeReader $script:xaml
         { [Windows.Markup.XamlReader]::Load($reader) } | Should -Not -Throw
     }
+
+    It 'reads BOM-free XAML explicitly as UTF-8 in Windows PowerShell 5.1' {
+        $entry = Get-Content (Join-Path $PSScriptRoot '../RevitServer-GUI.ps1') -Raw
+        $entry | Should -Match '\[IO\.File\]::ReadAllText\([^\r\n]+\[Text\.Encoding\]::UTF8\)'
+    }
 }
