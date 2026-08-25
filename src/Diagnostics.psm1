@@ -283,6 +283,23 @@ function New-DynamicIpRestrictionPlan {
     [pscustomobject]@{Targets=$targets;RequiresDedicatedSwitch=$true}
 }
 
+function Get-NetworkServiceAclState {
+    [CmdletBinding()]
+    param([AllowNull()]$Acl)
+
+    $matches = @()
+    if ($null -ne $Acl) {
+        $matches = @($Acl.Access | Where-Object {
+            [string]$_.IdentityReference -match 'NETWORK SERVICE|СЕТЕВАЯ СЛУЖБА'
+        })
+    }
+    $rights = @($matches | ForEach-Object { [string]$_.FileSystemRights })
+    [pscustomobject]@{
+        HasNetworkService = [bool]($matches.Count -gt 0)
+        Rights = $rights -join '; '
+    }
+}
+
 function Get-ExtendedDiagnostics {
     [CmdletBinding()]
     param(
@@ -323,14 +340,13 @@ function Get-ExtendedDiagnostics {
                 $files = @(Get-ChildItem -LiteralPath $candidate -Recurse -File -ErrorAction SilentlyContinue)
                 $acl = $null
                 try { $acl = Get-Acl -LiteralPath $candidate } catch { }
-                $networkService = @()
-                if ($null -ne $acl) { $networkService = @($acl.Access | Where-Object { $_.IdentityReference -match 'NETWORK SERVICE|СЕТЕВАЯ СЛУЖБА' }) }
+                $aclState = Get-NetworkServiceAclState -Acl $acl
                 $dataDirectories += [pscustomobject]@{
                     Instance=$instance.Name;Path=$candidate;Files=$files.Count
                     SizeGB=[math]::Round((($files | Measure-Object Length -Sum).Sum)/1GB,2)
                     LastWrite=($files | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
-                    HasNetworkService=[bool]($networkService.Count -gt 0)
-                    NetworkServiceRights=($networkService.FileSystemRights -join '; ')
+                    HasNetworkService=$aclState.HasNetworkService
+                    NetworkServiceRights=$aclState.Rights
                 }
                 $logFiles += @($files | Where-Object { $_.Extension -in @('.log','.txt') -and $_.LastWriteTime -gt $Since } | Sort-Object LastWriteTime -Descending | Select-Object -First 10)
             }
@@ -422,4 +438,4 @@ function Get-ExtendedDiagnostics {
     }
 }
 
-Export-ModuleMember -Function New-DiagnosticFinding,ConvertTo-DotNetState,Get-DotNetFrameworkState,ConvertFrom-WuaUpdate,Select-RelevantUpdates,Get-WindowsUpdateState,Find-ApplicableUpdates,Get-CrashTimeline,Get-MissingEndpointRequest,Get-CrashEvents,Get-IisState,Get-RevitServerState,Get-NetworkState,Get-ProfilerState,New-DynamicIpRestrictionPlan,Get-ExtendedDiagnostics
+Export-ModuleMember -Function New-DiagnosticFinding,ConvertTo-DotNetState,Get-DotNetFrameworkState,ConvertFrom-WuaUpdate,Select-RelevantUpdates,Get-WindowsUpdateState,Find-ApplicableUpdates,Get-CrashTimeline,Get-MissingEndpointRequest,Get-CrashEvents,Get-IisState,Get-RevitServerState,Get-NetworkState,Get-ProfilerState,New-DynamicIpRestrictionPlan,Get-NetworkServiceAclState,Get-ExtendedDiagnostics
