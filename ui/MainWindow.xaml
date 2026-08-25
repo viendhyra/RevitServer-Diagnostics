@@ -1,0 +1,169 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Revit Server Diagnostics" Width="1240" Height="780"
+        MinWidth="1100" MinHeight="700" WindowStartupLocation="CenterScreen"
+        Background="#F1F5F9" FontFamily="Segoe UI" FontSize="14">
+    <Window.Resources>
+        <SolidColorBrush x:Key="StatusOk" Color="#16A34A"/>
+        <SolidColorBrush x:Key="StatusWarn" Color="#D97706"/>
+        <SolidColorBrush x:Key="StatusFail" Color="#DC2626"/>
+        <SolidColorBrush x:Key="Accent" Color="#0369A1"/>
+        <SolidColorBrush x:Key="AccentDark" Color="#075985"/>
+        <SolidColorBrush x:Key="Surface" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="Background" Color="#F1F5F9"/>
+        <Style x:Key="NavButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="20,13"/>
+            <Setter Property="Margin" Value="10,3"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#0C4A6E"/></Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource Accent}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="18,10"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource AccentDark}"/></Trigger>
+                <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+            <Setter Property="Background" Value="#475569"/>
+        </Style>
+        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+            <Setter Property="Background" Value="#B91C1C"/>
+        </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="18"/>
+            <Setter Property="Margin" Value="0,0,14,14"/>
+            <Setter Property="BorderBrush" Value="#E2E8F0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style TargetType="DataGrid">
+            <Setter Property="AutoGenerateColumns" Value="False"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="CanUserAddRows" Value="False"/>
+            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="RowHeaderWidth" Value="0"/>
+            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+            <Setter Property="AlternatingRowBackground" Value="#F8FAFC"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="230"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Border Grid.Column="0" Background="#082F49">
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <StackPanel Margin="22,24,18,20">
+                    <TextBlock Text="REVIT SERVER" Foreground="#BAE6FD" FontWeight="Bold" FontSize="12"/>
+                    <TextBlock Text="Diagnostics" Foreground="White" FontWeight="Bold" FontSize="25" Margin="0,3,0,0"/>
+                    <TextBlock Text="IIS Pool Monitor" Foreground="#7DD3FC" Margin="0,3,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Row="1">
+                    <Button x:Name="NavHome" Style="{StaticResource NavButton}" Content="⌂  Главная"/>
+                    <Button x:Name="NavDiagnostic" Style="{StaticResource NavButton}" Content="✓  Проверка"/>
+                    <Button x:Name="NavMonitor" Style="{StaticResource NavButton}" Content="●  Живой журнал"/>
+                    <Button x:Name="NavRepairs" Style="{StaticResource NavButton}" Content="⚙  Исправления"/>
+                    <Button x:Name="NavReports" Style="{StaticResource NavButton}" Content="▤  Отчёты"/>
+                </StackPanel>
+                <Border Grid.Row="2" Background="#0C4A6E" Padding="16" Margin="12">
+                    <StackPanel>
+                        <TextBlock Text="Права запуска" Foreground="#BAE6FD" FontSize="12"/>
+                        <TextBlock x:Name="AdminStatusText" Text="Проверка..." Foreground="White" FontWeight="SemiBold" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1" x:Name="MainFrame" Margin="24">
+            <Grid x:Name="HomeView">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <StackPanel Margin="0,0,0,20">
+                    <TextBlock Text="Состояние сервера" FontSize="28" FontWeight="Bold" Foreground="#0F172A"/>
+                    <TextBlock Text="Диагностика Revit Server и application pools IIS" Foreground="#64748B" Margin="0,5,0,0"/>
+                </StackPanel>
+                <UniformGrid Grid.Row="1" Columns="4">
+                    <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="СЕРВЕР" Foreground="#64748B"/><TextBlock x:Name="ServerText" Text="—" FontSize="20" FontWeight="Bold" Margin="0,7,0,0"/></StackPanel></Border>
+                    <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="IIS" Foreground="#64748B"/><TextBlock x:Name="IisStatusText" Text="Не проверен" FontSize="20" FontWeight="Bold" Margin="0,7,0,0"/></StackPanel></Border>
+                    <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="ПУЛЫ REVIT" Foreground="#64748B"/><TextBlock x:Name="PoolCountText" Text="0" FontSize="20" FontWeight="Bold" Margin="0,7,0,0"/></StackPanel></Border>
+                    <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="ПРОБЛЕМЫ" Foreground="#64748B"/><TextBlock x:Name="ProblemCountText" Text="0" FontSize="20" FontWeight="Bold" Foreground="{StaticResource StatusFail}" Margin="0,7,0,0"/></StackPanel></Border>
+                </UniformGrid>
+                <Grid Grid.Row="2" Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Быстрый запуск" FontSize="20" FontWeight="Bold"/>
+                            <TextBlock Text="Запустите полную безопасную проверку. Система ничего не изменит без отдельного подтверждения." TextWrapping="Wrap" Foreground="#475569" Margin="0,8,0,18"/>
+                            <Button x:Name="HomeRunButton" Style="{StaticResource PrimaryButton}" Content="Запустить проверку" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Последняя проверка" FontSize="18" FontWeight="Bold"/>
+                            <TextBlock x:Name="LastCheckText" Text="Ещё не выполнялась" Foreground="#475569" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                            <TextBlock Text="Монитор" FontSize="18" FontWeight="Bold" Margin="0,24,0,0"/>
+                            <TextBlock x:Name="MonitorStatusText" Text="Выключен" Foreground="#475569" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <Grid x:Name="DiagnosticView" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <DockPanel Margin="0,0,0,16">
+                    <StackPanel DockPanel.Dock="Left"><TextBlock Text="Полная проверка" FontSize="28" FontWeight="Bold"/><TextBlock Text="IIS, Revit Server, .NET и аварии" Foreground="#64748B"/></StackPanel>
+                    <Button x:Name="RunDiagnosticButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="Запустить проверку" HorizontalAlignment="Right"/>
+                </DockPanel>
+                <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,14">
+                    <StackPanel><TextBlock x:Name="ProgressText" Text="Готово" FontWeight="SemiBold"/><ProgressBar x:Name="ProgressBar" Height="10" Minimum="0" Maximum="100" Value="0" Margin="0,10,0,0"/></StackPanel>
+                </Border>
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="3*"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Style="{StaticResource Card}"><DockPanel><TextBlock DockPanel.Dock="Top" Text="Найденные проблемы" FontSize="18" FontWeight="Bold" Margin="0,0,0,10"/><DataGrid x:Name="FindingsGrid"><DataGrid.Columns><DataGridTextColumn Header="Уровень" Binding="{Binding Level}" Width="80"/><DataGridTextColumn Header="Код" Binding="{Binding Code}" Width="160"/><DataGridTextColumn Header="Описание" Binding="{Binding Message}" Width="*"/></DataGrid.Columns></DataGrid></DockPanel></Border>
+                    <Border Grid.Column="1" Style="{StaticResource Card}"><DockPanel><TextBlock DockPanel.Dock="Top" Text="Пулы Revit Server" FontSize="18" FontWeight="Bold" Margin="0,0,0,10"/><DataGrid x:Name="PoolsGrid"><DataGrid.Columns><DataGridTextColumn Header="Пул" Binding="{Binding Name}" Width="*"/><DataGridTextColumn Header="Состояние" Binding="{Binding State}" Width="110"/><DataGridTextColumn Header="Rapid-Fail" Binding="{Binding RapidFailMaxCrashes}" Width="90"/></DataGrid.Columns></DataGrid></DockPanel></Border>
+                </Grid>
+            </Grid>
+
+            <Grid x:Name="MonitorView" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <StackPanel><TextBlock Text="Живой журнал пулов" FontSize="28" FontWeight="Bold"/><TextBlock Text="Работает только пока открыто это окно" Foreground="#64748B"/></StackPanel>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,18,0,14"><Button x:Name="StartMonitorButton" Style="{StaticResource PrimaryButton}" Content="Начать наблюдение"/><Button x:Name="StopMonitorButton" Style="{StaticResource SecondaryButton}" Content="Остановить"/><Button x:Name="ClearMonitorButton" Style="{StaticResource SecondaryButton}" Content="Очистить таблицу"/></StackPanel>
+                <Border Grid.Row="2" Style="{StaticResource Card}"><DataGrid x:Name="MonitorGrid"><DataGrid.Columns><DataGridTextColumn Header="Время" Binding="{Binding Time, StringFormat=HH:mm:ss}" Width="90"/><DataGridTextColumn Header="Уровень" Binding="{Binding Level}" Width="80"/><DataGridTextColumn Header="Пул" Binding="{Binding Pool}" Width="210"/><DataGridTextColumn Header="Событие" Binding="{Binding Type}" Width="140"/><DataGridTextColumn Header="ID" Binding="{Binding EventId}" Width="70"/><DataGridTextColumn Header="Описание" Binding="{Binding Message}" Width="*"/></DataGrid.Columns></DataGrid></Border>
+            </Grid>
+
+            <Grid x:Name="RepairsView" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <StackPanel><TextBlock Text="Ручные исправления" FontSize="28" FontWeight="Bold"/><TextBlock Text="Каждое действие показывает изменения и требует подтверждения" Foreground="#64748B"/></StackPanel>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,18,0,0">
+                    <StackPanel>
+                        <Border Style="{StaticResource Card}"><DockPanel><Button x:Name="StartPoolsButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="Запустить пулы"/><StackPanel><TextBlock Text="Остановленные пулы" FontSize="19" FontWeight="Bold"/><TextBlock Text="Запускает только обнаруженные пулы Revit Server." Foreground="#475569" Margin="0,5,20,0"/></StackPanel></DockPanel></Border>
+                        <Border Style="{StaticResource Card}"><DockPanel><Button x:Name="BaseSettingsButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="Исправить настройки"/><StackPanel><TextBlock Text="Базовые настройки IIS" FontSize="19" FontWeight="Bold"/><TextBlock Text="AutoStart, AlwaysRunning и idle timeout = 0." Foreground="#475569" Margin="0,5,20,0"/></StackPanel></DockPanel></Border>
+                        <Border Style="{StaticResource Card}"><DockPanel><Button x:Name="RapidFailButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="Установить 20"/><StackPanel><TextBlock Text="Rapid-Fail Protection" FontSize="19" FontWeight="Bold"/><TextBlock Text="Оставляет защиту включённой и повышает максимум сбоев до 20." Foreground="#475569" Margin="0,5,20,0"/></StackPanel></DockPanel></Border>
+                        <Border Style="{StaticResource Card}"><DockPanel><Button x:Name="SetupProcDumpButton" DockPanel.Dock="Right" Style="{StaticResource DangerButton}" Content="Настроить ProcDump"/><StackPanel><TextBlock Text="Полные аварийные дампы" FontSize="19" FontWeight="Bold"/><TextBlock Text="Скачивает официальный Sysinternals ProcDump, проверяет подпись Microsoft и включает полные дампы." Foreground="#475569" Margin="0,5,20,0" TextWrapping="Wrap"/></StackPanel></DockPanel></Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <Grid x:Name="ReportsView" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <StackPanel><TextBlock Text="Отчёты и дампы" FontSize="28" FontWeight="Bold"/><TextBlock Text="Файлы остаются только на сервере" Foreground="#64748B"/></StackPanel>
+                <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,20,0,14"><StackPanel><TextBlock Text="Последний HTML-отчёт" FontSize="19" FontWeight="Bold"/><TextBlock x:Name="ReportPathText" Text="Отчёт ещё не создан" Foreground="#475569" TextWrapping="Wrap" Margin="0,8,0,14"/><Button x:Name="OpenReportButton" Style="{StaticResource PrimaryButton}" Content="Открыть отчёт" HorizontalAlignment="Left"/></StackPanel></Border>
+                <Border Grid.Row="2" Style="{StaticResource Card}"><StackPanel><TextBlock Text="Папка дампов" FontSize="19" FontWeight="Bold"/><TextBlock Text="C:\Dumps\RevitServer" Foreground="#475569" Margin="0,8,0,4"/><TextBlock Text="Внимание: полный дамп может быть размером с память процесса и содержать рабочие данные." Foreground="{StaticResource StatusWarn}" TextWrapping="Wrap" Margin="0,0,0,14"/><Button x:Name="OpenDumpsButton" Style="{StaticResource SecondaryButton}" Content="Открыть папку дампов" HorizontalAlignment="Left"/></StackPanel></Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

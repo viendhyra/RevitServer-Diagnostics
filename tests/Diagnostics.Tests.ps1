@@ -79,3 +79,14 @@ Describe 'Dynamic IP Restrictions scope' {
         $plan.Targets | Should -Be @('/RevitServerAdminRESTService2024','/ModelService2022')
     }
 }
+
+Describe 'Data directory ACL projection' {
+    It 'returns an empty rights string when NETWORK SERVICE has no ACE' {
+        $acl = [pscustomobject]@{ Access = @(
+            [pscustomobject]@{ IdentityReference='BUILTIN\Administrators'; FileSystemRights='FullControl' }
+        ) }
+        $state = Get-NetworkServiceAclState -Acl $acl
+        $state.HasNetworkService | Should -BeFalse
+        $state.Rights | Should -Be ''
+    }
+}

@@ -13,4 +13,13 @@
         }
         $failures | Should -BeNullOrEmpty
     }
+
+    It 'keeps every published CLI repair switch' {
+        $command = Get-Command (Join-Path $PSScriptRoot '../RevitServer-Diag.ps1')
+        @($command.Parameters.Keys) | Should -Contain 'Repair'
+        @($command.Parameters.Keys) | Should -Contain 'SetupProcDump'
+        @($command.Parameters.Keys) | Should -Contain 'InstallUpdates'
+        @($command.Parameters.Keys) | Should -Contain 'UpgradeNet481'
+        @($command.Parameters.Keys) | Should -Contain 'DisableDynamicIpRestrictions'
+    }
 }
