@@ -102,10 +102,20 @@ if (@($network.Adapters).Count -gt 1) { Add-LocalFinding INFO 'MULTIPLE_ADAPTERS
 $profiler = Get-ProfilerState
 if ($profiler.InjectionSuspected) { Add-LocalFinding FAIL 'CLR_PROFILER' 'Найдены переменные CLR-профилировщика; сторонний код может внедряться в w3wp.exe.' $profiler.Variables }
 
+$extended = Get-ExtendedDiagnostics -Since $since -IisState $iis -RevitState $revit -CrashEvents $crashEvents -SkipEndpointTest:$SkipEndpointTest
+$missingFeatures = @($extended.Features | Where-Object InstallState -ne 'Installed')
+if ($missingFeatures.Count -gt 0) { Add-LocalFinding FAIL 'IIS_FEATURES_MISSING' "Не установлено компонентов IIS: $($missingFeatures.Name -join ', '). -Repair установит их." $missingFeatures }
+$failedEndpoints = @($extended.EndpointTests | Where-Object { $_.Status -ne 200 })
+if ($failedEndpoints.Count -gt 0) { Add-LocalFinding FAIL 'ENDPOINT_FAILED' "Не отвечают эндпоинты Revit Server: $($failedEndpoints.Count)." $failedEndpoints }
+if (@($extended.LogErrors).Count -gt 0) { Add-LocalFinding WARN 'REVIT_LOG_ERRORS' "В журналах Revit Server найдено строк с ошибками: $(@($extended.LogErrors).Count)." }
+if (@($extended.MissingEndpoints).Count -gt 0) { Add-LocalFinding WARN 'MISSING_ENDPOINTS' "Клиенты запрашивают отсутствующие версии Revit Server: $($extended.MissingEndpoints.Year -join ', ')." $extended.MissingEndpoints }
+if (@($extended.TaskCorrelations).Count -gt 0) { Add-LocalFinding WARN 'SCHEDULED_TASK_CORRELATION' "Задания планировщика рядом с падениями (±5 мин): $(@($extended.TaskCorrelations).Count)." $extended.TaskCorrelations }
+if (-not $extended.DumpState.AeDebugDebugger -and $extended.DumpState.WerDumpType -ne 2) { Add-LocalFinding FAIL 'DUMPS_NOT_CONFIGURED' 'Полные аварийные дампы не настроены. Используйте -SetupProcDump.' }
+
 $snapshot = [pscustomobject]@{
     Generated=Get-Date;Environment=$environment;DotNet=$dotnet
     Updates=[pscustomobject]@{State=$updateState;Available=$availableUpdates}
-    Iis=$iis;Revit=$revit;Crashes=$crashes;Network=$network;Profiler=$profiler
+    Iis=$iis;Revit=$revit;Crashes=$crashes;Network=$network;Profiler=$profiler;Extended=$extended
 }
 
 $requested = @(Get-RequestedRepairs -Repair:$Repair -SetupProcDump:$SetupProcDump -InstallUpdates:$InstallUpdates -UpgradeNet481:$UpgradeNet481 -DisableDynamicIpRestrictions:$DisableDynamicIpRestrictions)
