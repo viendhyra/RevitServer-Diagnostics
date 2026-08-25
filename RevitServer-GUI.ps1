@@ -24,7 +24,7 @@ catch {
 
 $xamlPath = Join-Path $PSScriptRoot 'ui\MainWindow.xaml'
 if (-not (Test-Path -LiteralPath $xamlPath)) { throw "XAML interface not found: $xamlPath" }
-[xml]$xaml = Get-Content -LiteralPath $xamlPath -Raw
+[xml]$xaml = [IO.File]::ReadAllText($xamlPath,[Text.Encoding]::UTF8)
 $reader = New-Object Xml.XmlNodeReader $xaml
 $window = [Windows.Markup.XamlReader]::Load($reader)
 
