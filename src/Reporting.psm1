@@ -36,6 +36,16 @@ function Export-RevitDiagnosticReport {
         '05_crashes.csv' = @($Snapshot.Crashes.Events)
         '05_crash_signatures.csv' = @($Snapshot.Crashes.Signatures)
         '08_network.csv' = @($Snapshot.Network.Adapters)
+        '03_native_modules.csv' = @($Snapshot.Extended.NativeModules)
+        '03_features.csv' = @($Snapshot.Extended.Features)
+        '04_binaries.csv' = @($Snapshot.Extended.Binaries)
+        '04_data_dirs.csv' = @($Snapshot.Extended.DataDirectories)
+        '04_log_errors.csv' = @($Snapshot.Extended.LogErrors)
+        '04_endpoint_test.csv' = @($Snapshot.Extended.EndpointTests)
+        '04_missing_endpoints.csv' = @($Snapshot.Extended.MissingEndpoints)
+        '06_task_correlation.csv' = @($Snapshot.Extended.TaskCorrelations)
+        '07_w3wp_modules.csv' = @($Snapshot.Extended.W3wpModules)
+        '08_related.csv' = @($Snapshot.Extended.RelatedEvents)
     }
     foreach ($name in $tables.Keys) {
         if (@($tables[$name]).Count -gt 0) { @($tables[$name]) | Export-Csv (Join-Path $ReportPath $name) -NoTypeInformation -Encoding UTF8 }
