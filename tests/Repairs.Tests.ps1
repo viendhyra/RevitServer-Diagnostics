@@ -38,6 +38,30 @@ Describe 'Revit pool repair planning' {
         @($plan | Where-Object Target -eq 'DefaultAppPool').Count | Should -Be 0
         @($plan | Where-Object Action -eq 'SetPool').Count | Should -Be 1
     }
+
+    It 'recognizes only a fully compliant Revit pool state' {
+        $good = [pscustomobject]@{AutoStart=$true;StartMode='AlwaysRunning';IdleTimeoutMinutes=0;RapidFailEnabled=$true;RapidFailMaxCrashes=20;State='Started'}
+        $bad = [pscustomobject]@{AutoStart=$true;StartMode='AlwaysRunning';IdleTimeoutMinutes=20;RapidFailEnabled=$true;RapidFailMaxCrashes=20;State='Started'}
+        (Test-RevitPoolCompliance -Pool $good) | Should -BeTrue
+        (Test-RevitPoolCompliance -Pool $bad) | Should -BeFalse
+    }
+}
+
+Describe 'IIS feature rollback' {
+    It 'quotes each feature as a separate array item' {
+        New-IisFeatureRollbackCommand -Features @('Web-Server','Web-Asp-Net45') | Should -Be "Uninstall-WindowsFeature -Name @('Web-Server','Web-Asp-Net45')"
+    }
+}
+
+Describe 'Dynamic IP Restrictions change plan' {
+    It 'targets the two child configuration sections explicitly' {
+        $plan = New-DynamicIpRestrictionChangePlan -Location 'Default Web Site/RevitServerAdminRESTService2024'
+        @($plan.Filter) | Should -Be @(
+            'system.webServer/security/dynamicIpSecurity/denyByConcurrentRequests',
+            'system.webServer/security/dynamicIpSecurity/denyByRequestRate'
+        )
+        @($plan.Name | Sort-Object -Unique) | Should -Be @('enabled')
+    }
 }
 
 Describe 'ProcDump safety' {
