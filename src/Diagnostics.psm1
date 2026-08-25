@@ -300,6 +300,29 @@ function Get-NetworkServiceAclState {
     }
 }
 
+function ConvertTo-DumpRegistrationState {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]$AeDebug,
+        [AllowNull()]$Wer
+    )
+
+    $readValue = {
+        param($Source, [string]$Name)
+        if ($null -eq $Source) { return $null }
+        $property = $Source.PSObject.Properties[$Name]
+        if ($null -eq $property) { return $null }
+        $property.Value
+    }
+
+    [pscustomobject]@{
+        AeDebugDebugger = & $readValue $AeDebug 'Debugger'
+        AeDebugAuto = & $readValue $AeDebug 'Auto'
+        WerDumpFolder = & $readValue $Wer 'DumpFolder'
+        WerDumpType = & $readValue $Wer 'DumpType'
+    }
+}
+
 function Get-ExtendedDiagnostics {
     [CmdletBinding()]
     param(
@@ -428,7 +451,7 @@ function Get-ExtendedDiagnostics {
 
     $aeDebug = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AeDebug' -ErrorAction SilentlyContinue
     $wer = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps' -ErrorAction SilentlyContinue
-    $dumpState = [pscustomobject]@{AeDebugDebugger=if($aeDebug){$aeDebug.Debugger}else{$null};AeDebugAuto=if($aeDebug){$aeDebug.Auto}else{$null};WerDumpFolder=if($wer){$wer.DumpFolder}else{$null};WerDumpType=if($wer){$wer.DumpType}else{$null}}
+    $dumpState = ConvertTo-DumpRegistrationState -AeDebug $aeDebug -Wer $wer
 
     [pscustomobject]@{
         NativeModules=@($nativeModules);Features=$features;Binaries=$binaries;DataDirectories=$dataDirectories
@@ -438,4 +461,4 @@ function Get-ExtendedDiagnostics {
     }
 }
 
-Export-ModuleMember -Function New-DiagnosticFinding,ConvertTo-DotNetState,Get-DotNetFrameworkState,ConvertFrom-WuaUpdate,Select-RelevantUpdates,Get-WindowsUpdateState,Find-ApplicableUpdates,Get-CrashTimeline,Get-MissingEndpointRequest,Get-CrashEvents,Get-IisState,Get-RevitServerState,Get-NetworkState,Get-ProfilerState,New-DynamicIpRestrictionPlan,Get-NetworkServiceAclState,Get-ExtendedDiagnostics
+Export-ModuleMember -Function New-DiagnosticFinding,ConvertTo-DotNetState,Get-DotNetFrameworkState,ConvertFrom-WuaUpdate,Select-RelevantUpdates,Get-WindowsUpdateState,Find-ApplicableUpdates,Get-CrashTimeline,Get-MissingEndpointRequest,Get-CrashEvents,Get-IisState,Get-RevitServerState,Get-NetworkState,Get-ProfilerState,New-DynamicIpRestrictionPlan,Get-NetworkServiceAclState,ConvertTo-DumpRegistrationState,Get-ExtendedDiagnostics
