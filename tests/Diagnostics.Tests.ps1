@@ -90,3 +90,27 @@ Describe 'Data directory ACL projection' {
         $state.Rights | Should -Be ''
     }
 }
+
+Describe 'Dump registration state' {
+    It 'treats absent registry values as an unconfigured dump collector' {
+        $aeDebug = [pscustomobject]@{ PSPath = 'HKLM:\SOFTWARE\Microsoft\.NETFramework\AeDebug' }
+        $wer = [pscustomobject]@{ PSPath = 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps' }
+
+        { $script:dumpState = ConvertTo-DumpRegistrationState -AeDebug $aeDebug -Wer $wer } | Should -Not -Throw
+        $script:dumpState.AeDebugDebugger | Should -BeNullOrEmpty
+        $script:dumpState.AeDebugAuto | Should -BeNullOrEmpty
+        $script:dumpState.WerDumpFolder | Should -BeNullOrEmpty
+        $script:dumpState.WerDumpType | Should -BeNullOrEmpty
+    }
+
+    It 'preserves configured dump collector values' {
+        $aeDebug = [pscustomobject]@{ Debugger = 'procdump64.exe -ma %ld %ld'; Auto = '1' }
+        $wer = [pscustomobject]@{ DumpFolder = 'C:\Dumps'; DumpType = 2 }
+
+        $state = ConvertTo-DumpRegistrationState -AeDebug $aeDebug -Wer $wer
+        $state.AeDebugDebugger | Should -Match 'procdump64'
+        $state.AeDebugAuto | Should -Be '1'
+        $state.WerDumpFolder | Should -Be 'C:\Dumps'
+        $state.WerDumpType | Should -Be 2
+    }
+}
