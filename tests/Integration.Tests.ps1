@@ -1,4 +1,4 @@
-Describe 'PowerShell 5.1 compatibility surface' {
+﻿Describe 'PowerShell 5.1 compatibility surface' {
     It 'parses every shipped PowerShell file without syntax errors' {
         $root = Split-Path $PSScriptRoot -Parent
         $files = @(Get-ChildItem $root -Recurse -File | Where-Object { $_.Extension -in @('.ps1','.psm1') -and $_.FullName -notmatch '\\.git\\' })
