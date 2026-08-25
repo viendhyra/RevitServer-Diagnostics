@@ -47,6 +47,37 @@ Describe 'Revit pool repair planning' {
     }
 }
 
+Describe 'Focused GUI pool actions' {
+    BeforeAll {
+        $script:guiPools = @(
+            [pscustomobject]@{Name='RevitServerAppPool2024';State='Stopped';AutoStart=$false;StartMode='OnDemand';IdleTimeoutMinutes=20;RapidFailEnabled=$false;RapidFailMaxCrashes=5},
+            [pscustomobject]@{Name='DefaultAppPool';State='Stopped';AutoStart=$false;StartMode='OnDemand';IdleTimeoutMinutes=20;RapidFailEnabled=$false;RapidFailMaxCrashes=5}
+        )
+    }
+
+    It 'previews Rapid-Fail 20 only for target pools and enables protection' {
+        $rows = @(New-PoolActionPreview -Pools $script:guiPools -Action RapidFail)
+        @($rows.Pool | Sort-Object -Unique) | Should -Be @('RevitServerAppPool2024')
+        @($rows | Where-Object Setting -eq 'RapidFailEnabled').Desired | Should -Be 'True'
+        @($rows | Where-Object Setting -eq 'RapidFailMaxCrashes').Desired | Should -Be '20'
+    }
+
+    It 'previews start only for a stopped target pool' {
+        $rows = @(New-PoolActionPreview -Pools $script:guiPools -Action Start)
+        $rows.Count | Should -Be 1
+        $rows[0].Pool | Should -Be 'RevitServerAppPool2024'
+        $rows[0].Desired | Should -Be 'Started'
+    }
+
+    It 'previews base settings separately from Rapid-Fail' {
+        $rows = @(New-PoolActionPreview -Pools $script:guiPools -Action BaseSettings)
+        @($rows.Setting) | Should -Contain 'AutoStart'
+        @($rows.Setting) | Should -Contain 'StartMode'
+        @($rows.Setting) | Should -Contain 'IdleTimeoutMinutes'
+        @($rows.Setting) | Should -Not -Contain 'RapidFailMaxCrashes'
+    }
+}
+
 Describe 'IIS feature rollback' {
     It 'quotes each feature as a separate array item' {
         New-IisFeatureRollbackCommand -Features @('Web-Server','Web-Asp-Net45') | Should -Be "Uninstall-WindowsFeature -Name @('Web-Server','Web-Asp-Net45')"
