@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $base = 'https://raw.githubusercontent.com/viendhyra/RevitServer-Diagnostics/main'
 $target = Join-Path $env:TEMP ("RevitServer-Diagnostics_" + (Get-Date -Format 'yyyyMMdd_HHmmss'))
 $src = Join-Path $target 'src'
