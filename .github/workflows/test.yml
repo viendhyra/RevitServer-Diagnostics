@@ -17,6 +17,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Pester
+        uses: actions/cache@v4
+        with:
+          path: ~\Documents\WindowsPowerShell\Modules\Pester
+          key: pester-windows-powershell-6.1.0
       - name: Install Pester
         shell: powershell
         run: |
@@ -24,7 +29,9 @@ jobs:
             Register-PSRepository -Default
           }
           Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck
+          if (-not (Get-Module Pester -ListAvailable | Where-Object Version -ge '5.5.0')) {
+            Install-Module Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck
+          }
       - name: Run tests in Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Invoke-Tests.ps1
