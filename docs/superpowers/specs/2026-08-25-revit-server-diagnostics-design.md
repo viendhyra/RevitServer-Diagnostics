@@ -133,7 +133,7 @@ The repository is public so a diagnostic-only launcher can be invoked without a 
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
-irm https://raw.githubusercontent.com/Viend1211/RevitServer-Diagnostics/main/Run.ps1 | iex
+irm https://raw.githubusercontent.com/viendhyra/RevitServer-Diagnostics/main/Run.ps1 | iex
 ```
 
 Because piping remote code to `iex` has supply-chain risk, README also provides a recommended inspect-then-run form that downloads the script locally, displays its path, and lets the administrator review it before execution.
