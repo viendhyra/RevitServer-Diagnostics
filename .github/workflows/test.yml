@@ -25,8 +25,14 @@ jobs:
       - name: Install Pester
         shell: powershell
         run: |
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
           if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-            Register-PSRepository -Default
+            Register-PSRepository -Name PSGallery `
+              -SourceLocation 'https://www.powershellgallery.com/api/v2' `
+              -ScriptSourceLocation 'https://www.powershellgallery.com/api/v2/items/psscript' `
+              -PublishLocation 'https://www.powershellgallery.com/api/v2/package/' `
+              -ScriptPublishLocation 'https://www.powershellgallery.com/api/v2/package/' `
+              -InstallationPolicy Trusted
           }
           Set-PSRepository PSGallery -InstallationPolicy Trusted
           if (-not (Get-Module Pester -ListAvailable | Where-Object Version -ge '5.5.0')) {
