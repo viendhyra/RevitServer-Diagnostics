@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Import-Module Pester -MinimumVersion 5.5.0 -ErrorAction Stop
 
 $config = New-PesterConfiguration
