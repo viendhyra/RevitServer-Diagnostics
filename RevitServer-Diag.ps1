@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Диагностика и явно выбранное безопасное исправление Revit Server, IIS и .NET Framework.
 .DESCRIPTION
