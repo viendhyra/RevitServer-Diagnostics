@@ -15,7 +15,7 @@ foreach ($file in $files) {
     Invoke-WebRequest -UseBasicParsing -Uri "$base/$file" -OutFile $destination
 }
 
-Write-Host "Скрипт загружен из $base" -ForegroundColor Cyan
-Write-Host "Локальная копия: $target" -ForegroundColor Cyan
-Write-Host 'Запускается безопасный режим: только диагностика.' -ForegroundColor Green
+Write-Host "Downloaded from $base" -ForegroundColor Cyan
+Write-Host "Local copy: $target" -ForegroundColor Cyan
+Write-Host 'Safe mode: diagnostics only.' -ForegroundColor Green
 & (Join-Path $target 'RevitServer-Diag.ps1')
