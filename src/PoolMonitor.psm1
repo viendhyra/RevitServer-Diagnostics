@@ -80,7 +80,7 @@ function Update-PoolStateTransitions {
 
 function Add-BoundedMonitorEvent {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][Collections.ArrayList]$Buffer,[Parameter(Mandatory)]$Event,[ValidateRange(1,100000)][int]$Maximum=1000)
+    param([Parameter(Mandatory)][AllowEmptyCollection()][Collections.ArrayList]$Buffer,[Parameter(Mandatory)]$Event,[ValidateRange(1,100000)][int]$Maximum=1000)
     [void]$Buffer.Add($Event)
     while ($Buffer.Count -gt $Maximum) { $Buffer.RemoveAt(0) }
 }
